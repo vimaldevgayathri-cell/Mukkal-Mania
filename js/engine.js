@@ -414,15 +414,26 @@ window.MukkalEngine = (function () {
     drawMenuButtonLabels();
   }
 
+  function drawContainFit(image, box) {
+    // Scales the image uniformly (preserving its aspect ratio) to fit
+    // entirely inside box, then centers it — never stretches non-uniformly,
+    // which is what was smearing/garbling the button text before.
+    const scale = Math.min(box.w / image.naturalWidth, box.h / image.naturalHeight);
+    const drawW = image.naturalWidth * scale;
+    const drawH = image.naturalHeight * scale;
+    const drawX = box.x + (box.w - drawW) / 2;
+    const drawY = box.y + (box.h - drawH) / 2;
+    ctx.drawImage(image, drawX, drawY, drawW, drawH);
+  }
+
   function drawMenuButtonLabels() {
     const playBox = hitboxes.playBtn;
     const selectBox = hitboxes.selectBtn;
 
     // --- PLAY button ---
     if (sprites.playBtnImg && sprites.playBtnImg.complete && sprites.playBtnImg.naturalWidth > 0) {
-      ctx.drawImage(sprites.playBtnImg, playBox.x, playBox.y, playBox.w, playBox.h);
+      drawContainFit(sprites.playBtnImg, playBox);
       if (hoveredButton === "PLAY") {
-        // subtle highlight so hover state is still visible on top of the art
         ctx.globalAlpha = 0.15;
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(playBox.x, playBox.y, playBox.w, playBox.h);
@@ -439,7 +450,7 @@ window.MukkalEngine = (function () {
 
     // --- CHOOSE YOUR WEAPON button ---
     if (sprites.weaponBtnImg && sprites.weaponBtnImg.complete && sprites.weaponBtnImg.naturalWidth > 0) {
-      ctx.drawImage(sprites.weaponBtnImg, selectBox.x, selectBox.y, selectBox.w, selectBox.h);
+      drawContainFit(sprites.weaponBtnImg, selectBox);
       if (hoveredButton === "SELECT") {
         ctx.globalAlpha = 0.15;
         ctx.fillStyle = "#ffffff";
@@ -511,6 +522,14 @@ window.MukkalEngine = (function () {
     } else {
       ctx.fillStyle = "#1d3557";
       ctx.fillRect(0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT);
+      if (!window.__mukkalBgWarned) {
+        // Still on the flat navy fill means game_background.jpg either 404'd
+        // or hasn't finished loading. Check the Network tab for a 404 and
+        // confirm it's really sitting at assets/sprites/game_background.jpg
+        // (exact filename/case) relative to this script.
+        console.warn("[MukkalEngine] game_background.jpg did not load — check assets/sprites/game_background.jpg exists and the path/case matches exactly.");
+        window.__mukkalBgWarned = true;
+      }
     }
   }
 
@@ -616,7 +635,7 @@ window.MukkalEngine = (function () {
 
   function drawResultButton(image, box, hoverKey, fallbackText) {
     if (image && image.complete && image.naturalWidth > 0) {
-      ctx.drawImage(image, box.x, box.y, box.w, box.h);
+      drawContainFit(image, box);
       if (hoveredButton === hoverKey) {
         ctx.globalAlpha = 0.15;
         ctx.fillStyle = "#ffffff";
