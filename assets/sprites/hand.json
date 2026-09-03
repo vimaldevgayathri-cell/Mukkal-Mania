@@ -1,0 +1,24 @@
+{ "frames": {
+   "Hand-0001.ase": {
+    "frame": { "x": 0, "y": 0, "w": 64, "h": 64 },
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": { "x": 0, "y": 0, "w": 64, "h": 64 },
+    "sourceSize": { "w": 64, "h": 64 },
+    "duration": 200
+   }
+ },
+ "meta": {
+  "app": "https://github.com/LibreSprite/LibreSprite/",
+  "version": "1.1-dev",
+  "image": "C:\\Users\\mohza\\OneDrive\\Desktop\\Sprites\\Hand-0001.png",
+  "format": "RGBA8888",
+  "size": { "w": 64, "h": 64 },
+  "scale": "1",
+  "frameTags": [
+  ],
+  "layers": [
+   { "name": "Layer 1", "opacity": 255, "blendMode": "normal" }
+  ]
+ }
+}
