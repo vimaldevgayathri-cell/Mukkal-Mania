@@ -1,56 +1,37 @@
-// ============================================================
-// MUKKAL-MANIA — AUDIO
-// ============================================================
-// Zero-conflict rule: everything under window.MukkalAudio.
-
+// =============================================================================
+// MUKKAL-MANIA AUDIO MANAGER (Synthesizer Fallback)
+// =============================================================================
 window.MukkalAudio = (function () {
+  const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
-  let ctx = null;
-
-  /**
-   * Web Audio API blocks sound until a real user gesture occurs.
-   * Call this from the FIRST click/keydown anywhere on the intro
-   * screen (wired in ui.js). Playing a silent buffer immediately
-   * unlocks the context for every sound that follows.
-   */
-  function unlockOnFirstGesture() {
-    if (window.MukkalState.audioUnlocked) return;
-
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    ctx = new AudioContext();
-
-    const buffer = ctx.createBuffer(1, 1, 22050);
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(ctx.destination);
-    source.start(0);
-
-    if (ctx.state === 'suspended') {
-      ctx.resume();
+  function playTone(freq, type, duration) {
+    if (audioContext.state === "suspended") {
+      audioContext.resume();
     }
-
-    window.MukkalState.audioUnlocked = true;
-    console.log('[MukkalAudio] Context unlocked');
-  }
-
-  /**
-   * Play a preloaded <audio> element by its key in
-   * MukkalEngine.assets.audio. Safe no-op if not loaded yet.
-   */
-  function play(key, { volume = 1.0, loop = false } = {}) {
-    const clip = window.MukkalEngine.assets.audio[key];
-    if (!clip) {
-      console.warn(`[MukkalAudio] Missing audio asset: ${key}`);
-      return;
-    }
-    const instance = clip.cloneNode(); // allow overlapping triggers
-    instance.volume = volume;
-    instance.loop = loop;
-    instance.play().catch(err => console.warn('[MukkalAudio] play blocked:', err));
+    const osc = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, audioContext.currentTime);
+    gain.gain.setValueAtTime(0.1, audioContext.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + duration);
+    osc.connect(gain);
+    gain.connect(audioContext.destination);
+    osc.start();
+    osc.stop(audioContext.currentTime + duration);
   }
 
   return {
-    unlockOnFirstGesture,
-    play,
+    playSFX: function (key) {
+      if (key === "button_hover") playTone(440, "sine", 0.05);
+      else if (key === "button_click") playTone(880, "square", 0.1);
+      else playTone(587, "triangle", 0.15);
+    },
+    playBGM: function () {},
+    playMemeFail: function () {
+      playTone(150, "sawtooth", 0.4);
+    },
+    playVictory: function () {
+      playTone(523, "square", 0.2);
+    }
   };
-})();
+})();s
