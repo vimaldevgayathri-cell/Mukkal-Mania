@@ -1,4 +1,4 @@
-// ============================================================
+gi// ============================================================
 // MUKKAL-MANIA — UI (Frontend / Assets laptop owns this file)
 // ============================================================
 // Zero-conflict rule: everything under window.MukkalUI.
