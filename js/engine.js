@@ -1,5 +1,5 @@
 // =============================================================================
-// MUKKAL-MANIA MASTER ENGINE (With Sprite Fallbacks)
+// MUKKAL-MANIA MASTER ENGINE (Full 160x100 Background Integration)
 // =============================================================================
 
 window.MukkalState = {
@@ -16,11 +16,9 @@ window.MukkalState = {
 
   introAnimation: {
     currentFrame: 0,
-    totalFrames: 14,
-    frameWidth: 640,
-    frameHeight: 360,
+    totalFrames: 31,
     frameTimer: 0,
-    frameInterval: 90
+    frameInterval: 80
   },
 
   dipDepth: 0,
@@ -37,17 +35,20 @@ window.MukkalEngine = (function () {
   const sprites = {};
   let hoveredButton = null;
 
-  const VIRTUAL_WIDTH = 640;
-  const VIRTUAL_HEIGHT = 360;
+  const VIRTUAL_WIDTH = 160;
+  const VIRTUAL_HEIGHT = 100;
 
+  // Repositioned buttons to sit nicely on top of the stall banner/counter area
+  // NOTE: these hitboxes are now INVISIBLE — used only for hover/click detection,
+  // since the art already has PLAY / CHOOSE YOUR BISCUIT baked into the background.
   const hitboxes = {
-    playBtn: { x: 220, y: 190, w: 200, h: 40 },
-    selectBtn: { x: 220, y: 245, w: 200, h: 40 },
-    carouselLeft: { x: 80, y: 155, w: 40, h: 60 },
-    carouselRight: { x: 520, y: 155, w: 40, h: 60 },
-    closeModalBtn: { x: 535, y: 45, w: 30, h: 30 },
-    tryAgainBtn: { x: 140, y: 240, w: 160, h: 45 },
-    quitBtn: { x: 340, y: 240, w: 160, h: 45 }
+    playBtn: { x: 30, y: 55, w: 100, h: 14 },
+    selectBtn: { x: 30, y: 73, w: 100, h: 14 },
+    carouselLeft: { x: 10, y: 40, w: 15, h: 20 },
+    carouselRight: { x: 135, y: 40, w: 15, h: 20 },
+    closeModalBtn: { x: 138, y: 8, w: 12, h: 12 },
+    tryAgainBtn: { x: 15, y: 68, w: 60, h: 18 },
+    quitBtn: { x: 85, y: 68, w: 60, h: 18 }
   };
 
   function loadAssets(callback) {
@@ -71,9 +72,6 @@ window.MukkalEngine = (function () {
       sprites[key] = new Image();
       sprites[key].src = assetManifest[key];
       sprites[key].onload = () => {
-        if (key === "loadingIntro") {
-          window.MukkalState.introAnimation.totalFrames = Math.floor(sprites[key].naturalWidth / 640) || 14;
-        }
         loaded++;
         if (loaded === total && callback) callback();
       };
@@ -84,13 +82,17 @@ window.MukkalEngine = (function () {
     }
   }
 
-  function drawSpriteFrame(image, frameIdx, frameW, frameH, drawX, drawY, targetW, targetH) {
+  function drawSpriteFrame(image, frameIdx, totalFrames, drawX, drawY, targetW, targetH) {
     if (!image || !image.complete || image.naturalWidth === 0) return false;
+    
+    const frameW = image.naturalWidth / totalFrames;
+    const frameH = image.naturalHeight;
     const sourceX = frameIdx * frameW;
+
     ctx.drawImage(
       image,
       sourceX, 0, frameW, frameH,
-      drawX, drawY, targetW || frameW, targetH || frameH
+      drawX, drawY, targetW, targetH
     );
     return true;
   }
@@ -98,6 +100,9 @@ window.MukkalEngine = (function () {
   function init() {
     canvas = document.getElementById("gameCanvas");
     ctx = canvas.getContext("2d");
+    
+    canvas.width = VIRTUAL_WIDTH;
+    canvas.height = VIRTUAL_HEIGHT;
     ctx.imageSmoothingEnabled = false;
 
     loadAssets(() => {
@@ -289,13 +294,11 @@ window.MukkalEngine = (function () {
 
     switch (window.MukkalState.currentScene) {
       case "INTRO_PAN":
-        renderIntroLoadingSequence(timestamp);
-        break;
       case "MENU":
-        renderMenuScene();
+        renderMenuScene(timestamp);
         break;
       case "BISCUIT_SELECT":
-        renderBiscuitSelectModal();
+        renderBiscuitSelectModal(timestamp);
         break;
       case "GAMEPLAY":
         updateAndRenderGameplay();
@@ -311,90 +314,52 @@ window.MukkalEngine = (function () {
     requestAnimationFrame(gameLoop);
   }
 
-  function renderIntroLoadingSequence(timestamp) {
-    const anim = window.MukkalState.introAnimation;
+  function renderMenuScene(timestamp) {
+    // 1. Uniform background color matching the periwinkle sky (#8d99ae)
+    ctx.fillStyle = "#8d99ae";
+    ctx.fillRect(0, 0, 160, 100);
 
-    const drawn = drawSpriteFrame(
+    // 2. Render 31-Frame Intro Animation across the full 160x100 canvas
+    const anim = window.MukkalState.introAnimation;
+    const drawnAnim = drawSpriteFrame(
       sprites.loadingIntro, 
       anim.currentFrame, 
-      anim.frameWidth, 
-      anim.frameHeight, 
+      anim.totalFrames, 
       0, 0, 
-      VIRTUAL_WIDTH, VIRTUAL_HEIGHT
+      160, 100
     );
 
-    if (!drawn) {
-      ctx.fillStyle = "#1e1e2f";
-      ctx.fillRect(0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT);
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 16px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText("LOADING CHAYA KADAM...", 320, 180);
-      return;
-    }
+    if (window.MukkalState.currentScene === "INTRO_PAN" && drawnAnim) {
+      if (!anim.frameTimer) anim.frameTimer = timestamp;
+      if (timestamp - anim.frameTimer >= anim.frameInterval) {
+        anim.currentFrame++;
+        anim.frameTimer = timestamp;
 
-    if (!anim.frameTimer) anim.frameTimer = timestamp;
-
-    if (timestamp - anim.frameTimer >= anim.frameInterval) {
-      anim.currentFrame++;
-      anim.frameTimer = timestamp;
-
-      if (anim.currentFrame >= anim.totalFrames) {
-        window.MukkalState.currentScene = "MENU";
+        if (anim.currentFrame >= anim.totalFrames) {
+          anim.currentFrame = anim.totalFrames - 1; 
+        }
       }
     }
+
+    // 3. Buttons removed — the background art already shows PLAY / CHOOSE YOUR
+    // BISCUIT baked in. hitboxes above still drive hover sound + click handling,
+    // they're just no longer drawn as orange rectangles.
   }
 
-  function renderMenuScene() {
-    const drawn = drawSpriteFrame(sprites.chayaKadam, 0, 640, 360, 0, 0, 640, 360);
-    if (!drawn) {
-      ctx.fillStyle = "#a8dadc";
-      ctx.fillRect(0, 0, 640, 240);
-      ctx.fillStyle = "#457b9d";
-      ctx.fillRect(0, 240, 640, 120);
-    }
-
-    drawSpriteFrame(sprites.titleLogo, 0, 400, 100, 120, 40, 400, 100);
-
-    const playFrame = hoveredButton === "PLAY" ? 1 : 0;
-    const selectFrame = hoveredButton === "SELECT" ? 1 : 0;
-
-    const drewPlay = drawSpriteFrame(sprites.menuButtons, playFrame, 200, 40, hitboxes.playBtn.x, hitboxes.playBtn.y, 200, 40);
-    const drewSelect = drawSpriteFrame(sprites.menuButtons, selectFrame + 2, 200, 40, hitboxes.selectBtn.x, hitboxes.selectBtn.y, 200, 40);
-
-    if (!drewPlay) {
-      ctx.fillStyle = hoveredButton === "PLAY" ? "#ffb703" : "#fb8500";
-      ctx.fillRect(hitboxes.playBtn.x, hitboxes.playBtn.y, hitboxes.playBtn.w, hitboxes.playBtn.h);
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 16px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText("PLAY", hitboxes.playBtn.x + 100, hitboxes.playBtn.y + 25);
-    }
-
-    if (!drewSelect) {
-      ctx.fillStyle = hoveredButton === "SELECT" ? "#ffb703" : "#fb8500";
-      ctx.fillRect(hitboxes.selectBtn.x, hitboxes.selectBtn.y, hitboxes.selectBtn.w, hitboxes.selectBtn.h);
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 14px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText("CHOOSE YOUR BISCUIT", hitboxes.selectBtn.x + 100, hitboxes.selectBtn.y + 25);
-    }
-  }
-
-  function renderBiscuitSelectModal() {
-    renderMenuScene();
+  function renderBiscuitSelectModal(timestamp) {
+    renderMenuScene(timestamp);
 
     ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
-    ctx.fillRect(0, 0, 640, 360);
+    ctx.fillRect(0, 0, 160, 100);
 
-    drawSpriteFrame(sprites.modalBg, 0, 520, 300, 60, 30, 520, 300);
+    drawSpriteFrame(sprites.modalBg, 0, 1, 15, 10, 130, 80);
 
     const keys = Object.keys(window.MukkalState.biscuitCatalog);
     const currentKey = window.MukkalState.selectedBiscuit;
 
-    const slideW = 160;
-    const slideH = 200;
-    const centerY = 85;
+    const slideW = 40;
+    const slideH = 50;
+    const centerY = 22;
     const activeIndex = keys.indexOf(currentKey);
 
     [-1, 0, 1].forEach((offset) => {
@@ -402,30 +367,28 @@ window.MukkalEngine = (function () {
       const itemKey = keys[itemIndex];
       const itemObj = window.MukkalState.biscuitCatalog[itemKey];
 
-      const posX = 240 + (offset * 140);
+      const posX = 60 + (offset * 35);
 
       if (offset === 0) {
-        const highlightFrame = itemObj.slideFrame * 2 + 1;
-        const drew = drawSpriteFrame(sprites.biscuitSlides, highlightFrame, slideW, slideH, posX - 10, centerY - 10, 180, 220);
-        if (!drew) {
-          ctx.fillStyle = "#ffb703";
-          ctx.fillRect(posX - 10, centerY - 10, 180, 220);
-          ctx.fillStyle = "#023e8a";
-          ctx.font = "bold 18px monospace";
-          ctx.textAlign = "center";
-          ctx.fillText(itemObj.name, posX + 80, centerY + 100);
-        }
+        ctx.fillStyle = "#ffb703";
+        ctx.fillRect(posX - 2, centerY - 2, slideW + 4, slideH + 4);
+        ctx.fillStyle = "#023e8a";
+        ctx.font = "bold 6px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(itemObj.name, posX + 20, centerY + 25);
       } else {
         ctx.globalAlpha = 0.4;
-        const normalFrame = itemObj.slideFrame * 2;
-        drawSpriteFrame(sprites.biscuitSlides, normalFrame, slideW, slideH, posX, centerY, slideW, slideH);
+        ctx.fillStyle = "#cccccc";
+        ctx.fillRect(posX, centerY, slideW, slideH);
         ctx.globalAlpha = 1.0;
       }
     });
 
-    drawSpriteFrame(sprites.carouselArrows, hoveredButton === "PREV_BISCUIT" ? 1 : 0, 40, 60, hitboxes.carouselLeft.x, hitboxes.carouselLeft.y, 40, 60);
-    drawSpriteFrame(sprites.carouselArrows, (hoveredButton === "NEXT_BISCUIT" ? 1 : 0) + 2, 40, 60, hitboxes.carouselRight.x, hitboxes.carouselRight.y, 40, 60);
-    drawSpriteFrame(sprites.closeBtn, hoveredButton === "CLOSE_MODAL" ? 1 : 0, 30, 30, hitboxes.closeModalBtn.x, hitboxes.closeModalBtn.y, 30, 30);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 8px monospace";
+    ctx.fillText("<", hitboxes.carouselLeft.x + 5, hitboxes.carouselLeft.y + 12);
+    ctx.fillText(">", hitboxes.carouselRight.x + 5, hitboxes.carouselRight.y + 12);
+    ctx.fillText("X", hitboxes.closeModalBtn.x + 3, hitboxes.closeModalBtn.y + 8);
   }
 
   function updateAndRenderGameplay() {
@@ -437,77 +400,68 @@ window.MukkalEngine = (function () {
       }
     }
 
-    const drawnBg = drawSpriteFrame(sprites.chayaKadam, 1, 640, 360, 0, 0, 640, 360);
-    if (!drawnBg) {
-      ctx.fillStyle = "#1d3557";
-      ctx.fillRect(0, 0, 640, 360);
-      // Tea Cup Fallback
-      ctx.fillStyle = "#6c584c";
-      ctx.fillRect(260, 220, 120, 100);
-      ctx.fillStyle = "#d4a373";
-      ctx.fillRect(270, 220, 100, 15);
-    }
+    ctx.fillStyle = "#1d3557";
+    ctx.fillRect(0, 0, 160, 100);
+    ctx.fillStyle = "#6c584c";
+    ctx.fillRect(65, 60, 30, 25);
+    ctx.fillStyle = "#d4a373";
+    ctx.fillRect(68, 60, 24, 4);
 
     const currentDepth = Math.min(window.MukkalState.dipDepth, 100);
-    const handY = 20 + (currentDepth * 1.2);
+    const handY = 5 + (currentDepth * 0.35);
 
-    const animFrame = Math.min(Math.floor((currentDepth / 100) * 10), 9);
-    const drewHand = drawSpriteFrame(sprites.handDipSheet, animFrame, 128, 128, 256, handY);
-
-    if (!drewHand) {
-      ctx.fillStyle = "#e0ac69";
-      ctx.fillRect(285, handY, 70, 90);
-      ctx.fillStyle = "#b08968";
-      ctx.beginPath();
-      ctx.arc(320, handY + 95, 18, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    ctx.fillStyle = "#e0ac69";
+    ctx.fillRect(72, handY, 16, 22);
+    ctx.fillStyle = "#b08968";
+    ctx.beginPath();
+    ctx.arc(80, handY + 24, 4, 0, Math.PI * 2);
+    ctx.fill();
 
     ctx.fillStyle = "#ffb703";
-    ctx.font = "bold 16px monospace";
+    ctx.font = "bold 6px monospace";
     ctx.textAlign = "left";
-    ctx.fillText(`SCORE: ${window.MukkalState.score}`, 20, 30);
-    ctx.fillText(`HOLD SPACE / CLICK TO DIP`, 20, 340);
+    ctx.fillText(`SCORE: ${window.MukkalState.score}`, 5, 10);
+    ctx.fillText(`HOLD SPACE TO DIP`, 5, 95);
   }
 
   function renderGameOverScene(isVictory) {
     updateAndRenderGameplay();
 
     ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
-    ctx.fillRect(100, 50, 440, 260);
+    ctx.fillRect(20, 15, 120, 70);
     ctx.strokeStyle = isVictory ? "#ffb703" : "#e63946";
-    ctx.lineWidth = 4;
-    ctx.strokeRect(100, 50, 440, 260);
+    ctx.lineWidth = 1;
+    ctx.strokeRect(20, 15, 120, 70);
 
     ctx.textAlign = "center";
-    ctx.font = "bold 24px monospace";
+    ctx.font = "bold 8px monospace";
 
     if (isVictory) {
       ctx.fillStyle = "#ffb703";
-      ctx.fillText("PERFECT DIP!", 320, 100);
+      ctx.fillText("PERFECT DIP!", 80, 30);
       ctx.fillStyle = "#ffffff";
-      ctx.font = "16px monospace";
-      ctx.fillText(`SCORE: ${window.MukkalState.score}`, 320, 140);
+      ctx.font = "6px monospace";
+      ctx.fillText(`SCORE: ${window.MukkalState.score}`, 80, 42);
     } else {
       ctx.fillStyle = "#e63946";
-      ctx.fillText("BISCUIT CRUMBLED!", 320, 100);
+      ctx.fillText("CRUMBLED!", 80, 30);
       ctx.fillStyle = "#ffffff";
-      ctx.font = "14px monospace";
-      ctx.fillText("Soggy disaster in Chaya Kadam's cup.", 320, 140);
-      ctx.fillText(`TOTAL SCORE: ${window.MukkalState.score}`, 320, 170);
+      ctx.font = "5px monospace";
+      ctx.fillText("Soggy disaster!", 80, 42);
+      ctx.fillText(`SCORE: ${window.MukkalState.score}`, 80, 50);
     }
 
     ctx.fillStyle = hoveredButton === "TRY_AGAIN" ? "#ffb703" : "#ffffff";
     ctx.fillRect(hitboxes.tryAgainBtn.x, hitboxes.tryAgainBtn.y, hitboxes.tryAgainBtn.w, hitboxes.tryAgainBtn.h);
     ctx.fillStyle = "#000000";
-    ctx.font = "bold 14px monospace";
-    ctx.fillText("TRY AGAIN", hitboxes.tryAgainBtn.x + 80, hitboxes.tryAgainBtn.y + 27);
+    ctx.font = "bold 5px monospace";
+    ctx.fillText("TRY AGAIN", hitboxes.tryAgainBtn.x + 30, hitboxes.tryAgainBtn.y + 11);
 
     ctx.fillStyle = hoveredButton === "QUIT" ? "#e63946" : "#ffffff";
     ctx.fillRect(hitboxes.quitBtn.x, hitboxes.quitBtn.y, hitboxes.quitBtn.w, hitboxes.quitBtn.h);
     ctx.fillStyle = "#000000";
-    ctx.font = "bold 14px monospace";
-    ctx.fillText("JUST QUIT ALR", hitboxes.quitBtn.x + 80, hitboxes.quitBtn.y + 27);
+    ctx.font = "bold 5px monospace";
+    ctx.fillText("QUIT", hitboxes.quitBtn.x + 30, hitboxes.quitBtn.y + 11);
   }
 
   window.addEventListener("DOMContentLoaded", init);
