@@ -70,6 +70,7 @@ Demonstrates the full loop: intro animation → menu → gameplay dip mechanic �
 
 ## Team Contributions
 -Mohammed Zain: Frontend and Design — all LibreSprite artwork, sprite animation, and UI/visual design for the game.
+
 -Gayathri Vimaldev: Backend — game engine logic, state management, RNG/crumble mechanics, and canvas rendering pipeline.
 
 ---
