@@ -34,10 +34,10 @@ git clone
 cd mukkal-mania
 
 # Run
-# No build step or dependencies required — it's plain HTML/JS/Canvas.
-# Just open index.html in a browser, or serve it locally:
-python3 -m http.server 8000
-# then visit http://localhost:8000
+No build step or dependencies required — it's plain HTML/JS/Canvas.
+Just open index.html in a browser, or serve it locally:
+--python3 -m http.server 8000
+then visit http://localhost:8000
 
 ### Project Documentation
 For Software: https://github.com/vimaldevgayathri-cell/Mukkal-Mania.git
