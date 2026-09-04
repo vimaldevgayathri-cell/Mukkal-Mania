@@ -58,20 +58,20 @@ window.MukkalEngine = (function () {
 
   const BISCUIT_DRAW_SIZE = 20; // target size on canvas — fills the 19px green anchor disc
   const BISCUIT_SRC_CROP = { x: 6, y: 7, w: 19, h: 19 };
-  // Bumped from 10 -> 13 and switched the masking technique (see
-  // drawGameplayBackground/anchor-mask code below) to fully kill the green
-  // residue that was still showing around the crumbled/cracked cookie —
-  // its crop rect (x:7,y:8) is offset slightly from the regular/soggy one
-  // (x:6,y:7), so the old radius no longer fully covered the anchor circle
-  // once that sprite's art didn't line up pixel-for-pixel.
-  const GREEN_ANCHOR_MASK_RADIUS = 13;
+  // The hand sprite is chroma-keyed clean of its green anchor marker at
+  // load time (see chromaKeyGreenAnchor), so this is now just a small
+  // safety-net radius for any leftover anti-aliased fringe pixels — not the
+  // primary masking mechanism anymore. Kept deliberately small so it
+  // doesn't eat into real finger/hand art the way the old large blanket
+  // radius did.
+  const ANCHOR_SAFETY_PATCH_RADIUS = 6;
 
   // Edit this to your actual home page URL — used when QUIT is clicked.
   const HOME_PAGE_URL = "/";
 
   const RESULT_REVEAL_DELAY_MS = 2000; // how long the crumbled/soggy cookie shows before WON/FAILED flashes in
 
-  const CRACK_PROBABILITY = 0.9; // 90% of rounds end in a crack, 10% in a win
+  const CRACK_PROBABILITY = 0.8; // win chance raised to 1 in 5 (20%)
   const OUTCOME_MIN_DELAY_MS = 1200;
   const OUTCOME_MAX_DELAY_MS = 5000;
 
@@ -116,7 +116,7 @@ window.MukkalEngine = (function () {
       arrowIndicator: "assets/sprites/arrow.png",       // replaces the "ARROW UP/DOWN TO MOVE" text — decorative, not clickable
       playAgainBtnImg: "assets/sprites/playagain.png",  // replaces "TRY AGAIN" text on GAMEOVER/VICTORY
       quitBtnImg: "assets/sprites/quit.png",            // replaces "QUIT" text on GAMEOVER/VICTORY
-      gameBackground: "assets/sprites/game_background.jpg" // replaces the flat #1d3557 fill behind gameplay
+      gameBackground: "assets/sprites/gbg.png" // replaces the flat #1d3557 fill behind gameplay
     };
 
     let loaded = 0;
@@ -151,6 +151,46 @@ window.MukkalEngine = (function () {
     return true;
   }
 
+  function chromaKeyGreenAnchor(image) {
+    // hand.png bakes its green anchor-marker circle directly into the
+    // sprite's pixels. Runs once at load time: draws the sprite to an
+    // offscreen canvas and makes only the actually-green pixels
+    // transparent, leaving every other hand/finger pixel untouched. This
+    // replaces the old approach of erasing a big flat circle at draw time,
+    // which was removing legitimate hand art around the cookie along with
+    // the green (visible as "missing" finger pixels around the biscuit).
+    const off = document.createElement("canvas");
+    off.width = image.naturalWidth;
+    off.height = image.naturalHeight;
+    const octx = off.getContext("2d");
+    octx.drawImage(image, 0, 0);
+
+    let data;
+    try {
+      const imageData = octx.getImageData(0, 0, off.width, off.height);
+      data = imageData.data;
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
+        // Generous "is this greenish" test (not a single exact hex match)
+        // so it also catches lightly anti-aliased edge pixels between the
+        // green marker and the skin-tone art, without touching the actual
+        // skin tones (which are red/orange dominant, not green dominant).
+        if (a > 0 && g > 50 && g > r * 1.1 && g > b * 1.1) {
+          data[i + 3] = 0;
+        }
+      }
+      octx.putImageData(imageData, 0, 0);
+    } catch (e) {
+      // If the browser blocks getImageData (e.g. running the file straight
+      // off disk with file:// and no local server — a canvas "tainted by
+      // cross-origin data" security error), just fall back to the original
+      // sprite untouched rather than breaking the whole scene.
+      console.warn("[MukkalEngine] Could not chroma-key hand.png (likely a file:// / CORS restriction — serve the game over http:// instead). Falling back to the original sprite.", e);
+      return image;
+    }
+    return off; // a <canvas> works anywhere ctx.drawImage accepts an image source
+  }
+
   function init() {
     canvas = document.getElementById("gameCanvas");
     ctx = canvas.getContext("2d");
@@ -160,6 +200,9 @@ window.MukkalEngine = (function () {
     ctx.imageSmoothingEnabled = false;
 
     loadAssets(() => {
+      if (sprites.hand && sprites.hand.complete && sprites.hand.naturalWidth > 0) {
+        sprites.handClean = chromaKeyGreenAnchor(sprites.hand);
+      }
       bindInputEvents();
       requestAnimationFrame(gameLoop);
     });
@@ -523,11 +566,11 @@ window.MukkalEngine = (function () {
       ctx.fillStyle = "#1d3557";
       ctx.fillRect(0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT);
       if (!window.__mukkalBgWarned) {
-        // Still on the flat navy fill means game_background.jpg either 404'd
-        // or hasn't finished loading. Check the Network tab for a 404 and
-        // confirm it's really sitting at assets/sprites/game_background.jpg
-        // (exact filename/case) relative to this script.
-        console.warn("[MukkalEngine] game_background.jpg did not load — check assets/sprites/game_background.jpg exists and the path/case matches exactly.");
+        // Still on the flat navy fill means gbg.png either 404'd or hasn't
+        // finished loading. Check the Network tab for a 404 and confirm
+        // it's really sitting at assets/sprites/gbg.png (exact
+        // filename/case) relative to this script.
+        console.warn("[MukkalEngine] gbg.png did not load — check assets/sprites/gbg.png exists and the path/case matches exactly.");
         window.__mukkalBgWarned = true;
       }
     }
@@ -577,7 +620,8 @@ window.MukkalEngine = (function () {
     }
 
     if (sprites.hand && sprites.hand.complete && sprites.hand.naturalWidth > 0) {
-      ctx.drawImage(sprites.hand, HAND_DRAW_X, state.handY, 64, 64);
+      const handSpriteToDraw = sprites.handClean || sprites.hand;
+      ctx.drawImage(handSpriteToDraw, HAND_DRAW_X, state.handY, 64, 64);
     }
 
     const biscuitSprite =
@@ -590,11 +634,13 @@ window.MukkalEngine = (function () {
     const anchorY = state.handY + HAND_ANCHOR.y;
 
     // Patch the anchor circle with the real background (image or fallback
-    // color) instead of a flat fill, so no green sliver — and no mismatched
-    // solid-color disc — ever shows through, on any biscuit state.
+    // color). The hand sprite is now pre-cleaned of its green anchor
+    // marker (see chromaKeyGreenAnchor), so this no longer needs to erase a
+    // wide flat circle — it's just a small safety patch in case any tiny
+    // bit of anti-aliased green edge slipped past the chroma key.
     ctx.save();
     ctx.beginPath();
-    ctx.arc(anchorX, anchorY, GREEN_ANCHOR_MASK_RADIUS, 0, Math.PI * 2);
+    ctx.arc(anchorX, anchorY, ANCHOR_SAFETY_PATCH_RADIUS, 0, Math.PI * 2);
     ctx.clip();
     drawGameplayBackground();
     ctx.restore();
@@ -614,8 +660,15 @@ window.MukkalEngine = (function () {
 
     if (!state.roundResolved && sprites.arrowIndicator && sprites.arrowIndicator.complete && sprites.arrowIndicator.naturalWidth > 0) {
       // Decorative only — not a button, so no hitbox/click handling.
-      const arrowW = 80;
-      const arrowH = arrowW * (sprites.arrowIndicator.naturalHeight / sprites.arrowIndicator.naturalWidth);
+      // Cap the scale at 1:1 (never upscale, and only downscale as much as
+      // needed to fit the available width) — the previous fixed 80px
+      // target width was shrinking this ~2.3x, and at that ratio
+      // nearest-neighbor scaling was dropping whole letter strokes,
+      // producing the garbled/gappy text seen in testing.
+      const maxArrowW = VIRTUAL_WIDTH - 10; // 5px margin on each side
+      const scale = Math.min(1, maxArrowW / sprites.arrowIndicator.naturalWidth);
+      const arrowW = sprites.arrowIndicator.naturalWidth * scale;
+      const arrowH = sprites.arrowIndicator.naturalHeight * scale;
       ctx.drawImage(sprites.arrowIndicator, 5, VIRTUAL_HEIGHT - arrowH - 3, arrowW, arrowH);
     }
   }
