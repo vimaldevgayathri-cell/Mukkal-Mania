@@ -104,7 +104,6 @@ window.MukkalEngine = (function () {
       hand: "assets/sprites/hand.png",
       cup: "assets/sprites/cup.png",
       biscuitRegular: "assets/sprites/regular.png",
-      biscuitDipped: "assets/sprites/regulardipped.png",
       biscuitCracked: "assets/sprites/regularcracked.png",
       biscuitSoggy: "assets/sprites/regularsoggy.png",
       // NEW: real button art replacing the drawn text labels on MENU.
@@ -627,7 +626,6 @@ window.MukkalEngine = (function () {
     const biscuitSprite =
       state.biscuitState === "cracked" ? sprites.biscuitCracked :
       state.biscuitState === "soggy" ? sprites.biscuitSoggy :
-      state.biscuitState === "dipped" ? sprites.biscuitDipped :
       sprites.biscuitRegular;
 
     const anchorX = HAND_DRAW_X + HAND_ANCHOR.x;
