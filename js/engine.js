@@ -5,13 +5,14 @@
 window.MukkalState = {
   currentScene: "INTRO_PAN", // "INTRO_PAN", "MENU", "BISCUIT_SELECT", "GAMEPLAY", "GAMEOVER", "VICTORY"
   
-  selectedBiscuit: "oreo",
+  // Change-menu cookie choices. Keys map directly to the asset naming
+  // convention: [key].png / [key]cracked.png / [key]soggy.png
+  selectedBiscuit: "regular", // live pick while browsing the Change modal — "regular" selected by default
+  activeCookie: "regular",    // the cookie actually locked in for gameplay (set when PLAY starts a round)
   biscuitCatalog: {
-    oreo: { id: "oreo", name: "Oreo", slideFrame: 0, snapMultiplier: 0.6, soundSFX: "oreo_meme" },
-    good_day: { id: "good_day", name: "Good Day", slideFrame: 1, snapMultiplier: 0.9, soundSFX: "goodday_meme" },
-    marie: { id: "marie", name: "Marie", slideFrame: 2, snapMultiplier: 1.3, soundSFX: "marie_meme" },
-    butter_cookie: { id: "butter_cookie", name: "Butter Cookie", slideFrame: 3, snapMultiplier: 0.8, soundSFX: "butter_meme" },
-    plain_round: { id: "plain_round", name: "Plain Round", slideFrame: 4, snapMultiplier: 1.1, soundSFX: "plain_meme" }
+    regular: { id: "regular", name: "Regular", soundSFX: "regular_meme" },
+    oreo: { id: "oreo", name: "Oreo", soundSFX: "oreo_meme" },
+    butter: { id: "butter", name: "Butter", soundSFX: "butter_meme" }
   },
 
   introAnimation: {
@@ -99,13 +100,32 @@ window.MukkalEngine = (function () {
       modalBg: "assets/sprites/modal_bg.png",
       biscuitSlides: "assets/sprites/biscuit_slides.png",
       carouselArrows: "assets/sprites/carousel_arrows.png",
-      closeBtn: "assets/sprites/close_btn.png",
+      closeBtn: "assets/sprites/close.png",
+      // Change-modal nav + card-state art (new)
+      leftArrowImg: "assets/sprites/leftarrow.png",
+      rightArrowImg: "assets/sprites/rightarrow.png",
+      modalBgSelected: "assets/sprites/modalbgselected.png",
+      modalBgUnselected: "assets/sprites/modalbgunselected.png",
+      // Cookie name labels shown at the bottom of the Change modal for
+      // whichever cookie is currently centered/displayed.
+      regularTextImg: "assets/sprites/regulartext.png",
+      oreoTextImg: "assets/sprites/oreotext.png",
+      butterTextImg: "assets/sprites/buttertext.png",
       // Gameplay scene assets
       hand: "assets/sprites/hand.png",
       cup: "assets/sprites/cup.png",
       biscuitRegular: "assets/sprites/regular.png",
       biscuitCracked: "assets/sprites/regularcracked.png",
       biscuitSoggy: "assets/sprites/regularsoggy.png",
+      // Oreo / Butter counterparts of the three cookie visual states above,
+      // following the same [x].png / [x]cracked.png / [x]soggy.png naming
+      // convention so the Change menu can swap the active cookie in-game.
+      oreoBasic: "assets/sprites/oreo.png",
+      oreoCracked: "assets/sprites/oreocracked.png",
+      oreoSoggy: "assets/sprites/oreosoggy.png",
+      butterBasic: "assets/sprites/butter.png",
+      butterCracked: "assets/sprites/buttercracked.png",
+      butterSoggy: "assets/sprites/buttersoggy.png",
       // NEW: real button art replacing the drawn text labels on MENU.
       // Drop the files at these paths — filenames/paths can be changed here
       // if yours differ.
@@ -202,6 +222,23 @@ window.MukkalEngine = (function () {
       if (sprites.hand && sprites.hand.complete && sprites.hand.naturalWidth > 0) {
         sprites.handClean = chromaKeyGreenAnchor(sprites.hand);
       }
+
+      // Cookie key -> its three visual-state sprites, keyed to match
+      // window.MukkalState.biscuitCatalog / selectedBiscuit / activeCookie.
+      sprites.cookieSets = {
+        regular: { basic: sprites.biscuitRegular, cracked: sprites.biscuitCracked, soggy: sprites.biscuitSoggy },
+        oreo: { basic: sprites.oreoBasic, cracked: sprites.oreoCracked, soggy: sprites.oreoSoggy },
+        butter: { basic: sprites.butterBasic, cracked: sprites.butterCracked, soggy: sprites.butterSoggy }
+      };
+
+      // Cookie -> its name-label graphic, shown at the bottom of the
+      // Change modal for whichever cookie is currently centered.
+      sprites.cookieLabelImages = {
+        regular: sprites.regularTextImg,
+        oreo: sprites.oreoTextImg,
+        butter: sprites.butterTextImg
+      };
+
       bindInputEvents();
       requestAnimationFrame(gameLoop);
     });
@@ -339,6 +376,10 @@ window.MukkalEngine = (function () {
 
   function startGameplay() {
     const state = window.MukkalState;
+    // Whatever was picked in the Change menu becomes the cookie used for
+    // this round's art (regular/cracked/soggy sprites). Everything below
+    // this line is the original, untouched PLAY logic.
+    state.activeCookie = state.biscuitCatalog[state.selectedBiscuit] ? state.selectedBiscuit : "regular";
     state.currentScene = "GAMEPLAY";
     state.handY = HAND_MIN_Y;
     state.biscuitState = "regular";
@@ -468,6 +509,20 @@ window.MukkalEngine = (function () {
     ctx.drawImage(image, drawX, drawY, drawW, drawH);
   }
 
+  function drawNativeCentered(image, box) {
+    // Change-modal-only helper: draws the sprite at its own pixel
+    // dimensions (no scaling/stretching), centered inside box, so the
+    // cookie previews, card frames, arrows, close icon and name labels in
+    // the selection menu stay pixel-perfect at 100% original scale.
+    if (!image || !image.complete || image.naturalWidth === 0) return false;
+    const drawW = image.naturalWidth;
+    const drawH = image.naturalHeight;
+    const drawX = box.x + (box.w - drawW) / 2;
+    const drawY = box.y + (box.h - drawH) / 2;
+    ctx.drawImage(image, drawX, drawY, drawW, drawH);
+    return true;
+  }
+
   function drawMenuButtonLabels() {
     const playBox = hitboxes.playBtn;
     const selectBox = hitboxes.selectBtn;
@@ -515,7 +570,8 @@ window.MukkalEngine = (function () {
     ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
     ctx.fillRect(0, 0, 160, 100);
 
-    drawSpriteFrame(sprites.modalBg, 0, 1, 15, 10, 130, 80);
+    const modalPanelBox = { x: 15, y: 10, w: 130, h: 80 };
+    drawSpriteFrame(sprites.modalBg, 0, 1, modalPanelBox.x, modalPanelBox.y, modalPanelBox.w, modalPanelBox.h);
 
     const keys = Object.keys(window.MukkalState.biscuitCatalog);
     const currentKey = window.MukkalState.selectedBiscuit;
@@ -528,30 +584,75 @@ window.MukkalEngine = (function () {
     [-1, 0, 1].forEach((offset) => {
       const itemIndex = (activeIndex + offset + keys.length) % keys.length;
       const itemKey = keys[itemIndex];
-      const itemObj = window.MukkalState.biscuitCatalog[itemKey];
+      const isActive = offset === 0;
 
       const posX = 60 + (offset * 35);
+      const cardBox = { x: posX - 2, y: centerY - 2, w: slideW + 4, h: slideH + 4 };
 
-      if (offset === 0) {
-        ctx.fillStyle = "#ffb703";
-        ctx.fillRect(posX - 2, centerY - 2, slideW + 4, slideH + 4);
-        ctx.fillStyle = "#023e8a";
-        ctx.font = "bold 6px monospace";
-        ctx.textAlign = "center";
-        ctx.fillText(itemObj.name, posX + 20, centerY + 25);
-      } else {
-        ctx.globalAlpha = 0.4;
-        ctx.fillStyle = "#cccccc";
-        ctx.fillRect(posX, centerY, slideW, slideH);
-        ctx.globalAlpha = 1.0;
+      // Card frame: modalbgselected.png for the active/centered card,
+      // modalbgunselected.png for the neighbors — drawn at their own pixel
+      // size (no resize/stretch), centered in the card's slot. Falls back
+      // to a flat rect if the sprite hasn't loaded yet.
+      const cardBg = isActive ? sprites.modalBgSelected : sprites.modalBgUnselected;
+      ctx.globalAlpha = isActive ? 1.0 : 0.6;
+      const drewCardBg = drawNativeCentered(cardBg, cardBox);
+      if (!drewCardBg) {
+        ctx.fillStyle = isActive ? "#ffb703" : "#cccccc";
+        ctx.fillRect(cardBox.x, cardBox.y, cardBox.w, cardBox.h);
       }
+      ctx.globalAlpha = 1.0;
+
+      // Cookie preview (basic/regular-state art) at 100% original scale,
+      // centered on top of its card.
+      const cookieIcon = sprites.cookieSets && sprites.cookieSets[itemKey] ? sprites.cookieSets[itemKey].basic : null;
+      ctx.globalAlpha = isActive ? 1.0 : 0.6;
+      drawNativeCentered(cookieIcon, cardBox);
+      ctx.globalAlpha = 1.0;
     });
 
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 8px monospace";
-    ctx.fillText("<", hitboxes.carouselLeft.x + 5, hitboxes.carouselLeft.y + 12);
-    ctx.fillText(">", hitboxes.carouselRight.x + 5, hitboxes.carouselRight.y + 12);
-    ctx.fillText("X", hitboxes.closeModalBtn.x + 3, hitboxes.closeModalBtn.y + 8);
+    // Name label for whichever cookie is currently displayed/centered,
+    // shown once at the bottom of the modal panel — also at native scale.
+    const labelImg = sprites.cookieLabelImages && sprites.cookieLabelImages[currentKey];
+    const labelBox = { x: modalPanelBox.x, y: modalPanelBox.y + modalPanelBox.h - 24, w: modalPanelBox.w, h: 24 };
+    const drewLabel = drawNativeCentered(labelImg, labelBox);
+    if (!drewLabel) {
+      const currentItem = window.MukkalState.biscuitCatalog[currentKey];
+      ctx.fillStyle = "#023e8a";
+      ctx.font = "bold 6px monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(currentItem.name, modalPanelBox.x + modalPanelBox.w / 2, modalPanelBox.y + modalPanelBox.h - 6);
+    }
+
+    // Nav arrows — native scale, fall back to text glyphs if unloaded.
+    if (!drawNativeCentered(sprites.leftArrowImg, hitboxes.carouselLeft)) {
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 8px monospace";
+      ctx.textAlign = "left";
+      ctx.fillText("<", hitboxes.carouselLeft.x + 5, hitboxes.carouselLeft.y + 12);
+    }
+
+    if (!drawNativeCentered(sprites.rightArrowImg, hitboxes.carouselRight)) {
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 8px monospace";
+      ctx.textAlign = "left";
+      ctx.fillText(">", hitboxes.carouselRight.x + 5, hitboxes.carouselRight.y + 12);
+    }
+
+    // Close button — confirms the current selection (already committed to
+    // state.selectedBiscuit as the user browsed) and returns to MENU.
+    if (!drawNativeCentered(sprites.closeBtn, hitboxes.closeModalBtn)) {
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 8px monospace";
+      ctx.textAlign = "left";
+      ctx.fillText("X", hitboxes.closeModalBtn.x + 3, hitboxes.closeModalBtn.y + 8);
+    }
+
+    if (hoveredButton === "CLOSE_MODAL") {
+      ctx.globalAlpha = 0.15;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(hitboxes.closeModalBtn.x, hitboxes.closeModalBtn.y, hitboxes.closeModalBtn.w, hitboxes.closeModalBtn.h);
+      ctx.globalAlpha = 1.0;
+    }
   }
 
   function drawGameplayBackground() {
@@ -623,10 +724,14 @@ window.MukkalEngine = (function () {
       ctx.drawImage(handSpriteToDraw, HAND_DRAW_X, state.handY, 64, 64);
     }
 
+    const activeCookieSet = (sprites.cookieSets && sprites.cookieSets[state.activeCookie])
+      ? sprites.cookieSets[state.activeCookie]
+      : { basic: sprites.biscuitRegular, cracked: sprites.biscuitCracked, soggy: sprites.biscuitSoggy };
+
     const biscuitSprite =
-      state.biscuitState === "cracked" ? sprites.biscuitCracked :
-      state.biscuitState === "soggy" ? sprites.biscuitSoggy :
-      sprites.biscuitRegular;
+      state.biscuitState === "cracked" ? activeCookieSet.cracked :
+      state.biscuitState === "soggy" ? activeCookieSet.soggy :
+      activeCookieSet.basic;
 
     const anchorX = HAND_DRAW_X + HAND_ANCHOR.x;
     const anchorY = state.handY + HAND_ANCHOR.y;
